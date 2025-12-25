@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Merry Christmas</title>
      
     <style>
@@ -82,6 +85,14 @@
 
         @media (max-width: 1024px) {
             #webcam-wrapper { display: none !important; }
+
+            body {
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            }
+
+            #btn-fullscreen {
+                padding-bottom: calc(5px + env(safe-area-inset-bottom));
+            }
         }
     </style>
  
@@ -1118,10 +1129,54 @@
             };*/
  
             const fsBtn = document.getElementById('btn-fullscreen');
-            fsBtn.onclick = (e) => { e.stopPropagation(); document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); };
+            function enterFullscreen() {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.webkitEnterFullscreen) {
+                    elem.webkitEnterFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                } else {
+                    window.scrollTo(0, 1);
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function exitFullscreen() {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.webkitCancelFullScreen) {
+                    document.webkitCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                } else {
+                    document.body.style.overflow = 'auto';
+                }
+            }
+
+            function isFullscreen() {
+                return !!(document.fullscreenElement ||
+                         document.webkitFullscreenElement ||
+                         document.webkitCurrentFullScreenElement ||
+                         document.msFullscreenElement);
+            }
+
+            fsBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (isFullscreen()) {
+                    exitFullscreen();
+                } else {
+                    enterFullscreen();
+                }
+            };
              
             document.addEventListener('fullscreenchange', () => { 
-                const isFs = !!document.fullscreenElement;
+                const isFs = isFullscreen();
                 fsBtn.textContent = isFs ? '取消全屏' : '全屏显示'; 
                  
                 const colMedia = document.getElementById('col-media');
@@ -1141,7 +1196,19 @@
                     btnSwitch.style.display = 'block';
                 }*/
             });
- 
+            document.addEventListener('webkitfullscreenchange', () => {
+                const isFs = isFullscreen();
+                fsBtn.textContent = isFs ? '取消全屏' : '全屏显示';
+            });
+            document.addEventListener('mozfullscreenchange', () => {
+                const isFs = isFullscreen();
+                fsBtn.textContent = isFs ? '取消全屏' : '全屏显示';
+            });
+            document.addEventListener('MSFullscreenChange', () => {
+                const isFs = isFullscreen();
+                fsBtn.textContent = isFs ? '取消全屏' : '全屏显示';
+            });
+
             /*document.getElementById('btn-export').onclick = (e) => { e.stopPropagation(); exportSceneData(); };
              
             const importInput = document.getElementById('import-input');
