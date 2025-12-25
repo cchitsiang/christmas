@@ -79,6 +79,10 @@
  
         .letter-close-btn { position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.4); border-radius: 50%; color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; }
         .letter-close-btn:hover { background: rgba(255,255,255,0.2); color: #fff; border-color: #fff; }
+
+        @media (max-width: 1024px) {
+            #webcam-wrapper { display: none !important; }
+        }
     </style>
  
     <script type="importmap">
@@ -171,18 +175,20 @@
  
         const STATE = {
             mode: 'TREE', focusTarget: null, currentPhotoIndex: -1,
-            currentThemeIndex: 0, 
+            currentThemeIndex: 0,
             gestureDebounceTimer: 0,
-            isGestureSwitchEnabled: true, 
+            isGestureSwitchEnabled: true,
             scatterScale: 1.0, gestureBaseSpread: null,
             hand: { detected: false, x: 0, y: 0 },
             rotation: { x: 0, y: 0 }, spinVel: { x: 0, y: 0 }, time: 0,
             wasPointing: false, palmCenter: { x: 0.5, y: 0.5 }, hasPalmCenter: false,
             starMesh: null, starHaloMesh: null,
-            // 修改1：清空书信默认内容
-            letterContent: "", 
+            letterContent: "",
             letterTyper: null, letterStartTimer: null, letterLastTriggerTime: 0,
             musicData: null,
+            touch: { startX: 0, startY: 0, startTime: 0, isDragging: false },
+            swipeDebounceTimer: 0,
+            lastTapTime: 0,
         };
  
         let scene, camera, renderer, composer, clock = new THREE.Clock();
@@ -987,8 +993,100 @@
             composer.render();
         }
  
+        function handleSwipeToNextPhoto(direction) {
+            const photos = particleSystem.filter(p => p.type === 'PHOTO');
+            if (photos.length === 0) return;
+
+            if (STATE.currentPhotoIndex < 0) {
+                STATE.currentPhotoIndex = 0;
+            }
+
+            if (direction === 'left') {
+                STATE.currentPhotoIndex = (STATE.currentPhotoIndex + 1) % photos.length;
+            } else if (direction === 'right') {
+                STATE.currentPhotoIndex = (STATE.currentPhotoIndex - 1 + photos.length) % photos.length;
+            }
+
+            STATE.focusTarget = photos[STATE.currentPhotoIndex].mesh;
+            STATE.mode = 'FOCUS';
+            STATE.wasPointing = true;
+        }
+
+        function handleTouchStart(e) {
+            const touch = e.touches[0];
+            STATE.touch.startX = touch.clientX;
+            STATE.touch.startY = touch.clientY;
+            STATE.touch.startTime = Date.now();
+            STATE.touch.isDragging = true;
+        }
+
+        function handleTouchMove(e) {
+            if (!STATE.touch.isDragging) return;
+            e.preventDefault();
+        }
+
+        function handleTouchEnd(e) {
+            if (!STATE.touch.isDragging) return;
+            STATE.touch.isDragging = false;
+
+            const touch = e.changedTouches[0];
+            const deltaX = touch.clientX - STATE.touch.startX;
+            const deltaY = touch.clientY - STATE.touch.startY;
+            const deltaTime = Date.now() - STATE.touch.startTime;
+
+            const minSwipeDistance = 50;
+            const maxSwipeTime = 500;
+            const minSwipeVelocity = 0.3;
+            const tapMaxDistance = 10;
+            const tapMaxTime = 300;
+
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
+            const totalDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            if (totalDistance < tapMaxDistance && deltaTime < tapMaxTime) {
+                const now = Date.now();
+                const isDoubleTap = (now - STATE.lastTapTime) < 300;
+                STATE.lastTapTime = now;
+
+                if (STATE.mode === 'FOCUS') {
+                    STATE.mode = 'TREE';
+                    STATE.wasPointing = false;
+                    STATE.focusTarget = null;
+                } else if (isDoubleTap && STATE.mode === 'TREE') {
+                    const photos = particleSystem.filter(p => p.type === 'PHOTO');
+                    if (photos.length > 0) {
+                        if (STATE.currentPhotoIndex < 0) {
+                            STATE.currentPhotoIndex = 0;
+                        }
+                        STATE.focusTarget = photos[STATE.currentPhotoIndex].mesh;
+                        STATE.mode = 'FOCUS';
+                        STATE.wasPointing = true;
+                    }
+                }
+                return;
+            }
+
+            if (deltaTime > maxSwipeTime) return;
+
+            if (absX > minSwipeDistance && absX > absY * 1.5) {
+                const velocity = absX / deltaTime;
+                if (velocity >= minSwipeVelocity) {
+                    if (Date.now() - STATE.swipeDebounceTimer > 500) {
+                        STATE.swipeDebounceTimer = Date.now();
+                        const direction = deltaX > 0 ? 'right' : 'left';
+                        handleSwipeToNextPhoto(direction);
+                    }
+                }
+            }
+        }
+
         function setupEvents() {
             window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
+
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchmove', handleTouchMove, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
              
             /* const fileInput = document.getElementById('file-input');
             document.getElementById('btn-add-photo').onclick = (e) => { e.stopPropagation(); fileInput.click(); };
